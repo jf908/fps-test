@@ -1,12 +1,14 @@
 import * as THREE from 'three';
-import { Body, Vec3 } from 'cannon-es';
+import { Body, ContactEquation, Vec3 } from 'cannon-es';
 
 export class FirstPersonControls extends THREE.EventDispatcher {
   enabled = false;
   cannonBody: Body;
 
-  velocityFactor = 0.2;
-  jumpVelocity = 20;
+  velocityFactor = 0.04;
+  jumpVelocity = 9;
+
+  mouseSensitivity = 5;
 
   pitchObject: THREE.Object3D;
   yawObject: THREE.Object3D;
@@ -44,25 +46,28 @@ export class FirstPersonControls extends THREE.EventDispatcher {
 
     const contactNormal = new Vec3(); // Normal in the contact, pointing *out* of whatever the player touched
     const upAxis = new Vec3(0, 1, 0);
-    this.cannonBody.addEventListener('collide', (event) => {
-      const { contact } = event;
+    this.cannonBody.addEventListener(
+      'collide',
+      (event: { contact: ContactEquation }) => {
+        const { contact } = event;
 
-      // contact.bi and contact.bj are the colliding bodies, and contact.ni is the collision normal.
-      // We do not yet know which one is which! Let's check.
-      if (contact.bi.id === this.cannonBody.id) {
-        // bi is the player body, flip the contact normal
-        contact.ni.negate(contactNormal);
-      } else {
-        // bi is something else. Keep the normal as it is
-        contactNormal.copy(contact.ni);
-      }
+        // contact.bi and contact.bj are the colliding bodies, and contact.ni is the collision normal.
+        // We do not yet know which one is which! Let's check.
+        if (contact.bi.id === this.cannonBody.id) {
+          // bi is the player body, flip the contact normal
+          contact.ni.negate(contactNormal);
+        } else {
+          // bi is something else. Keep the normal as it is
+          contactNormal.copy(contact.ni);
+        }
 
-      // If contactNormal.dot(upAxis) is between 0 and 1, we know that the contact normal is somewhat in the up direction.
-      if (contactNormal.dot(upAxis) > 0.5) {
-        // Use a "good" threshold value between 0 and 1 here!
-        this.canJump = true;
+        // If contactNormal.dot(upAxis) is between 0 and 1, we know that the contact normal is somewhat in the up direction.
+        if (contactNormal.dot(upAxis) > 0.5) {
+          // Use a "good" threshold value between 0 and 1 here!
+          this.canJump = true;
+        }
       }
-    });
+    );
 
     this.velocity = this.cannonBody.velocity;
 
@@ -124,8 +129,10 @@ export class FirstPersonControls extends THREE.EventDispatcher {
 
     const { movementX, movementY } = event;
 
-    this.yawObject.rotation.y -= movementX * 0.002;
-    this.pitchObject.rotation.x -= movementY * 0.002;
+    this.yawObject.rotation.y -=
+      ((movementX * 0.022 * this.mouseSensitivity) / 180) * Math.PI;
+    this.pitchObject.rotation.x -=
+      ((movementY * 0.022 * this.mouseSensitivity) / 180) * Math.PI;
 
     this.pitchObject.rotation.x = Math.max(
       -Math.PI / 2,
@@ -203,9 +210,11 @@ export class FirstPersonControls extends THREE.EventDispatcher {
       return;
     }
 
-    delta *= 0.1;
+    const dt = delta / 1000;
 
     this.inputVelocity.set(0, 0, 0);
+
+    // this.cannonBody.coll
 
     if (this.moveForward) {
       this.inputVelocity.z = -this.velocityFactor * delta;
@@ -227,6 +236,11 @@ export class FirstPersonControls extends THREE.EventDispatcher {
     this.euler.order = 'XYZ';
     this.quaternion.setFromEuler(this.euler);
     this.inputVelocity.applyQuaternion(this.quaternion);
+
+    // console.log(Math.pow(1 - 0.999, dt));
+    this.velocity.x *= Math.pow(1 - 0.9999, dt);
+    this.velocity.y *= Math.pow(1 - 0.5, dt);
+    this.velocity.z *= Math.pow(1 - 0.9999, dt);
 
     // Add to the object
     this.velocity.x += this.inputVelocity.x;
