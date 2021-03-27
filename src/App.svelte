@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as THREE from 'three';
+  import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
   import {
     Body,
     Box,
@@ -16,9 +17,14 @@
   import { FirstPersonControls } from './first-person';
   import { onMount } from 'svelte';
 
+  function isMesh(obj: THREE.Object3D): obj is THREE.Mesh {
+    return obj['isMesh'] === true;
+  }
+
   let instructionsEl: HTMLElement;
   class Scene {
     private controls: FirstPersonControls;
+    private clock: THREE.Clock;
     private scene: THREE.Scene;
     private camera: THREE.PerspectiveCamera;
     private renderer: THREE.WebGLRenderer;
@@ -30,6 +36,8 @@
 
     private bodies: Body[] = [];
     private meshes: THREE.Mesh[] = [];
+
+    private mixers: THREE.AnimationMixer[] = [];
 
     private lastTime = performance.now();
 
@@ -43,6 +51,7 @@
       this.instructionsEl = instructionsEl;
 
       this.setupPhysics();
+      this.clock = new THREE.Clock();
       this.scene = new THREE.Scene();
 
       this.camera = new THREE.PerspectiveCamera(
@@ -117,6 +126,30 @@
       this.setupControls();
       this.world.addBody(this.playerBody);
 
+      let mixer: THREE.AnimationMixer;
+      const loader = new GLTFLoader();
+      loader.load('pistol.glb', (gltf) => {
+        mixer = new THREE.AnimationMixer(gltf.scene);
+        const action = mixer.clipAction(gltf.animations[0]);
+        action.setLoop(THREE.LoopOnce, 0);
+
+        this.mixers.push(mixer);
+
+        gltf.scene.traverse((child) => {
+          if (isMesh(child)) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        const scale = 0.6;
+        gltf.scene.scale.set(scale, scale, scale);
+        gltf.scene.setRotationFromEuler(new THREE.Euler(0, Math.PI, 0));
+        gltf.scene.position.set(0.3, -0.2, -0.5);
+        this.scene.add(gltf.scene);
+        this.controls.setWeapon([gltf.scene, action]);
+      });
+
       this.setupRenderer();
       document.body.appendChild(this.renderer.domElement);
       window.addEventListener('resize', () => this.onWindowResize(), false);
@@ -169,7 +202,7 @@
     }
 
     setupLights() {
-      const ambient = new THREE.AmbientLight(0x111111);
+      const ambient = new THREE.AmbientLight(0x555555);
       this.scene.add(ambient);
       const spotLight = new THREE.SpotLight(0xffffff, 0.9, 0, Math.PI / 4, 1);
       spotLight.position.set(10, 30, 10);
@@ -224,12 +257,11 @@
     }
 
     draw(dt: number) {
-      const deltaTime = performance.now() - this.lastTime;
-      this.lastTime = performance.now();
+      const delta = this.clock.getDelta();
 
       if (this.controls.enabled) {
-        this.controls.update(deltaTime);
-        this.world.step(deltaTime / 1000);
+        this.controls.update(delta);
+        this.world.step(delta);
         for (let i = 0; i < this.bodies.length; i++) {
           const pos = this.bodies[i].position;
           this.meshes[i].position.set(pos.x, pos.y, pos.z);
@@ -237,6 +269,8 @@
           this.meshes[i].quaternion.set(quat.x, quat.y, quat.z, quat.w);
         }
       }
+
+      this.mixers.forEach((mixer) => mixer.update(delta));
 
       this.renderer.render(this.scene, this.camera);
     }

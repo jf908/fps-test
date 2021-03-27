@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { Body, ContactEquation, Vec3 } from 'cannon-es';
-
+import { spring } from './spring';
+import type { Vec2 } from 'three';
 export class FirstPersonControls extends THREE.EventDispatcher {
   enabled = false;
   cannonBody: Body;
 
-  velocityFactor = 0.04;
+  velocityFactor = 40;
   jumpVelocity = 9;
 
   mouseSensitivity = 5;
@@ -27,6 +28,11 @@ export class FirstPersonControls extends THREE.EventDispatcher {
   isLocked = false;
   lockEvent = { type: 'lock' };
   unlockEvent = { type: 'unlock' };
+
+  mouse: Vec2 = { x: 0, y: 0 };
+
+  weapon: [THREE.Object3D, THREE.AnimationAction] | null;
+  weaponSpring = spring({ x: 0, y: 0 });
 
   constructor(camera: THREE.Camera, cannonBody: Body) {
     super();
@@ -79,6 +85,7 @@ export class FirstPersonControls extends THREE.EventDispatcher {
   }
 
   connect() {
+    document.addEventListener('mousedown', this.onMouseDown);
     document.addEventListener('mousemove', this.onMouseMove);
     document.addEventListener('pointerlockchange', this.onPointerlockChange);
     document.addEventListener('pointerlockerror', this.onPointerlockError);
@@ -87,6 +94,7 @@ export class FirstPersonControls extends THREE.EventDispatcher {
   }
 
   disconnect() {
+    document.removeEventListener('mousedown', this.onMouseDown);
     document.removeEventListener('mousemove', this.onMouseMove);
     document.removeEventListener('pointerlockchange', this.onPointerlockChange);
     document.removeEventListener('pointerlockerror', this.onPointerlockError);
@@ -122,22 +130,20 @@ export class FirstPersonControls extends THREE.EventDispatcher {
     console.error('PointerLockControlsCannon: Unable to use Pointer Lock API');
   };
 
+  onMouseDown = (event: MouseEvent) => {
+    if (event.button === 0 && this.weapon) {
+      this.weapon[1].play();
+      this.weapon[1].reset();
+    }
+  };
+
   onMouseMove = (event: MouseEvent) => {
     if (!this.enabled) {
       return;
     }
 
-    const { movementX, movementY } = event;
-
-    this.yawObject.rotation.y -=
-      ((movementX * 0.022 * this.mouseSensitivity) / 180) * Math.PI;
-    this.pitchObject.rotation.x -=
-      ((movementY * 0.022 * this.mouseSensitivity) / 180) * Math.PI;
-
-    this.pitchObject.rotation.x = Math.max(
-      -Math.PI / 2,
-      Math.min(Math.PI / 2, this.pitchObject.rotation.x)
-    );
+    this.mouse.x += event.movementX;
+    this.mouse.y += event.movementY;
   };
 
   onKeyDown = (event: KeyboardEvent) => {
@@ -195,6 +201,11 @@ export class FirstPersonControls extends THREE.EventDispatcher {
     }
   };
 
+  setWeapon(weapon: [THREE.Object3D, THREE.AnimationAction]) {
+    this.weapon = weapon;
+    this.pitchObject.add(weapon[0]);
+  }
+
   getObject() {
     return this.yawObject;
   }
@@ -205,30 +216,52 @@ export class FirstPersonControls extends THREE.EventDispatcher {
   //   return vector;
   // }
 
-  update(delta: number) {
+  update(dt: number) {
     if (this.enabled === false) {
       return;
     }
 
-    const dt = delta / 1000;
-
     this.inputVelocity.set(0, 0, 0);
 
-    // this.cannonBody.coll
-
     if (this.moveForward) {
-      this.inputVelocity.z = -this.velocityFactor * delta;
+      this.inputVelocity.z = -1;
     }
     if (this.moveBackward) {
-      this.inputVelocity.z = this.velocityFactor * delta;
+      this.inputVelocity.z = 1;
     }
 
     if (this.moveLeft) {
-      this.inputVelocity.x = -this.velocityFactor * delta;
+      this.inputVelocity.x = -1;
     }
     if (this.moveRight) {
-      this.inputVelocity.x = this.velocityFactor * delta;
+      this.inputVelocity.x = 1;
     }
+
+    this.inputVelocity.normalize();
+    if (this.inputVelocity.length() > 0) {
+      this.inputVelocity.multiplyScalar(this.velocityFactor * dt);
+    }
+
+    if (this.weapon) {
+      let rot = this.weaponSpring({ x: this.mouse.x, y: this.mouse.y }, dt);
+      const rotScale = 0.002;
+      this.weapon[0].setRotationFromEuler(
+        new THREE.Euler(rot.y * rotScale, rot.x * rotScale + Math.PI, 0)
+      );
+    }
+
+    this.yawObject.rotation.y -=
+      ((this.mouse.x * 0.022 * this.mouseSensitivity) / 180) * Math.PI;
+    this.pitchObject.rotation.x -=
+      ((this.mouse.y * 0.022 * this.mouseSensitivity) / 180) * Math.PI;
+
+    this.pitchObject.rotation.x = Math.max(
+      -Math.PI / 2,
+      Math.min(Math.PI / 2, this.pitchObject.rotation.x)
+    );
+
+    this.mouse.x = 0;
+    this.mouse.y = 0;
 
     // Convert velocity to world coordinates
     this.euler.x = this.pitchObject.rotation.x;
