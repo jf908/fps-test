@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+  import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
   import {
     Body,
     Box,
@@ -16,6 +17,9 @@
   } from 'cannon-es';
   import { FirstPersonControls } from './first-person';
   import { onMount } from 'svelte';
+  import type { PMREMGenerator, WebGLRenderTarget } from 'three';
+  import { Weapon } from './weapon';
+  import { SoundEngine } from './sound';
 
   function isMesh(obj: THREE.Object3D): obj is THREE.Mesh {
     return obj['isMesh'] === true;
@@ -29,6 +33,7 @@
     private camera: THREE.PerspectiveCamera;
     private renderer: THREE.WebGLRenderer;
     private instructionsEl: HTMLElement;
+    private sound: SoundEngine;
 
     private world: World;
     private physicsMaterial: Material;
@@ -39,7 +44,8 @@
 
     private mixers: THREE.AnimationMixer[] = [];
 
-    private lastTime = performance.now();
+    private pmremGenerator: PMREMGenerator;
+    private exrCubeRenderTarget: WebGLRenderTarget;
 
     private playerBody: Body;
 
@@ -64,10 +70,16 @@
         this.camera.position.set(0, 0, 10);
       }
 
+      this.sound = new SoundEngine(this.camera);
+
       this.setupLights();
       this.createGround();
 
-      const material = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+      const material = this.createMaterial({
+        color: 0xff0000,
+        metalness: 0,
+        roughness: 0.1,
+      });
 
       let boxSize = new Vec3(0.5, 0.5, 0.5);
       let boxShape = new Box(boxSize);
@@ -126,13 +138,13 @@
       this.setupControls();
       this.world.addBody(this.playerBody);
 
+      // Animation Gun
       let mixer: THREE.AnimationMixer;
       const loader = new GLTFLoader();
-      loader.load('pistol.glb', (gltf) => {
+      loader.load('assets/model/pistol.glb', (gltf) => {
         mixer = new THREE.AnimationMixer(gltf.scene);
         const action = mixer.clipAction(gltf.animations[0]);
         action.setLoop(THREE.LoopOnce, 0);
-
         this.mixers.push(mixer);
 
         gltf.scene.traverse((child) => {
@@ -146,11 +158,42 @@
         gltf.scene.scale.set(scale, scale, scale);
         gltf.scene.setRotationFromEuler(new THREE.Euler(0, Math.PI, 0));
         gltf.scene.position.set(0.3, -0.2, -0.5);
+        gltf.scene.renderOrder = 1;
         this.scene.add(gltf.scene);
-        this.controls.setWeapon([gltf.scene, action]);
+        this.controls.setWeapon(
+          new Weapon(
+            this.sound,
+            gltf.scene,
+            action,
+            this.sound.loadSound('assets/sound/fire_1.wav')
+          )
+        );
+
+        gltf.parser.getDependencies('material').then((materials) => {
+          materials.forEach((m: THREE.MeshStandardMaterial) => {
+            console.log(m);
+            m.depthTest = false;
+            m.needsUpdate = true;
+          });
+        });
       });
 
       this.setupRenderer();
+
+      this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+      this.pmremGenerator.compileEquirectangularShader();
+      new EXRLoader()
+        .setDataType(THREE.UnsignedByteType)
+        .load('assets/hdr/city.exr', (texture) => {
+          this.exrCubeRenderTarget = this.pmremGenerator.fromEquirectangular(
+            texture
+          );
+          this.scene.background = this.exrCubeRenderTarget.texture;
+          this.scene.environment = this.exrCubeRenderTarget.texture;
+
+          texture.dispose();
+        });
+
       document.body.appendChild(this.renderer.domElement);
       window.addEventListener('resize', () => this.onWindowResize(), false);
     }
@@ -202,20 +245,15 @@
     }
 
     setupLights() {
-      const ambient = new THREE.AmbientLight(0x555555);
-      this.scene.add(ambient);
-      const spotLight = new THREE.SpotLight(0xffffff, 0.9, 0, Math.PI / 4, 1);
+      const spotLight = new THREE.SpotLight(0xffffff, 100, 0, Math.PI / 4, 1);
       spotLight.position.set(10, 30, 10);
       spotLight.target.position.set(0, 0, 0);
       spotLight.castShadow = true;
-
       spotLight.shadow.camera.near = 5;
       spotLight.shadow.camera.far = 100;
       spotLight.shadow.camera.fov = 30;
-
       spotLight.shadow.mapSize.width = 8192;
       spotLight.shadow.mapSize.height = 8192;
-
       this.scene.add(spotLight);
     }
 
@@ -226,6 +264,10 @@
 
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      this.renderer.physicallyCorrectLights = true;
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.outputEncoding = THREE.sRGBEncoding;
 
       this.renderer.setAnimationLoop((dt) => {
         this.draw(dt);
@@ -242,11 +284,22 @@
       const geometry = new THREE.PlaneGeometry(100, 100, 50, 50);
       geometry.rotateX(-Math.PI / 2);
 
-      const material = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+      const material = this.createMaterial({
+        color: 0xffffff,
+        metalness: 0,
+        roughness: 0.8,
+      });
       const mesh = new THREE.Mesh(geometry, material);
 
       mesh.receiveShadow = true;
       this.scene.add(mesh);
+    }
+
+    createMaterial(
+      params: THREE.MeshStandardMaterialParameters
+    ): THREE.MeshStandardMaterial {
+      const mat = new THREE.MeshStandardMaterial(params);
+      return mat;
     }
 
     addPhysicsObject(body: Body, mesh: THREE.Mesh) {

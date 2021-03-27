@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Body, ContactEquation, Vec3 } from 'cannon-es';
 import { spring } from './spring';
 import type { Vec2 } from 'three';
+import type { Weapon } from './weapon';
 export class FirstPersonControls extends THREE.EventDispatcher {
   enabled = false;
   cannonBody: Body;
@@ -31,7 +32,7 @@ export class FirstPersonControls extends THREE.EventDispatcher {
 
   mouse: Vec2 = { x: 0, y: 0 };
 
-  weapon: [THREE.Object3D, THREE.AnimationAction] | null;
+  weapon: Weapon | null;
   weaponSpring = spring({ x: 0, y: 0 });
 
   constructor(camera: THREE.Camera, cannonBody: Body) {
@@ -132,8 +133,7 @@ export class FirstPersonControls extends THREE.EventDispatcher {
 
   onMouseDown = (event: MouseEvent) => {
     if (event.button === 0 && this.weapon) {
-      this.weapon[1].play();
-      this.weapon[1].reset();
+      this.weapon.fire();
     }
   };
 
@@ -201,9 +201,9 @@ export class FirstPersonControls extends THREE.EventDispatcher {
     }
   };
 
-  setWeapon(weapon: [THREE.Object3D, THREE.AnimationAction]) {
+  setWeapon(weapon: Weapon) {
     this.weapon = weapon;
-    this.pitchObject.add(weapon[0]);
+    this.pitchObject.add(weapon.object);
   }
 
   getObject() {
@@ -237,15 +237,15 @@ export class FirstPersonControls extends THREE.EventDispatcher {
       this.inputVelocity.x = 1;
     }
 
-    this.inputVelocity.normalize();
     if (this.inputVelocity.length() > 0) {
+      this.inputVelocity.normalize();
       this.inputVelocity.multiplyScalar(this.velocityFactor * dt);
     }
 
     if (this.weapon) {
       let rot = this.weaponSpring({ x: this.mouse.x, y: this.mouse.y }, dt);
-      const rotScale = 0.002;
-      this.weapon[0].setRotationFromEuler(
+      const rotScale = 0.004;
+      this.weapon.object.setRotationFromEuler(
         new THREE.Euler(rot.y * rotScale, rot.x * rotScale + Math.PI, 0)
       );
     }
