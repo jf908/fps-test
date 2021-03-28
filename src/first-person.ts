@@ -118,21 +118,19 @@ export class FirstPersonControls extends THREE.EventDispatcher {
   onPointerlockChange = () => {
     if (document.pointerLockElement) {
       this.dispatchEvent(this.lockEvent);
-
       this.isLocked = true;
     } else {
       this.dispatchEvent(this.unlockEvent);
-
       this.isLocked = false;
     }
   };
 
-  onPointerlockError = () => {
+  onPointerlockError = (e) => {
     console.error('PointerLockControlsCannon: Unable to use Pointer Lock API');
   };
 
   onMouseDown = (event: MouseEvent) => {
-    if (event.button === 0 && this.weapon) {
+    if (this.isLocked && event.button === 0 && this.weapon) {
       this.weapon.fire();
     }
   };

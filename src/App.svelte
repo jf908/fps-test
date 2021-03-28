@@ -20,6 +20,10 @@
   import type { PMREMGenerator, WebGLRenderTarget } from 'three';
   import { Weapon } from './weapon';
   import { SoundEngine } from './sound';
+  import { settings } from './store';
+  import Pause from './components/Pause.svelte';
+
+  let paused = true;
 
   function isMesh(obj: THREE.Object3D): obj is THREE.Mesh {
     return obj['isMesh'] === true;
@@ -32,7 +36,6 @@
     private scene: THREE.Scene;
     private camera: THREE.PerspectiveCamera;
     private renderer: THREE.WebGLRenderer;
-    private instructionsEl: HTMLElement;
     private sound: SoundEngine;
 
     private world: World;
@@ -49,19 +52,15 @@
 
     private playerBody: Body;
 
-    private fov = 70;
-
     private thirdPerson = false;
 
-    setup(instructionsEl: HTMLElement) {
-      this.instructionsEl = instructionsEl;
-
+    setup() {
       this.setupPhysics();
       this.clock = new THREE.Clock();
       this.scene = new THREE.Scene();
 
       this.camera = new THREE.PerspectiveCamera(
-        this.fov,
+        70,
         window.innerWidth / window.innerHeight,
         0.01,
         1000
@@ -171,7 +170,6 @@
 
         gltf.parser.getDependencies('material').then((materials) => {
           materials.forEach((m: THREE.MeshStandardMaterial) => {
-            console.log(m);
             m.depthTest = false;
             m.needsUpdate = true;
           });
@@ -196,24 +194,26 @@
 
       document.body.appendChild(this.renderer.domElement);
       window.addEventListener('resize', () => this.onWindowResize(), false);
+
+      // Setup store listeners
+      settings.subscribe((settings) => {
+        this.camera.fov = settings.fov;
+        this.camera.updateProjectionMatrix();
+      });
     }
 
     setupControls() {
       this.controls = new FirstPersonControls(this.camera, this.playerBody);
       this.scene.add(this.controls.getObject());
 
-      this.instructionsEl.addEventListener('click', () => {
-        this.controls.lock();
-      });
-
       this.controls.addEventListener('lock', () => {
         this.controls.enabled = true;
-        this.instructionsEl.style.display = 'none';
+        paused = false;
       });
 
       this.controls.addEventListener('unlock', () => {
         this.controls.enabled = false;
-        this.instructionsEl.style.display = null;
+        paused = true;
       });
     }
 
@@ -333,37 +333,16 @@
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
+
+    resume = () => {
+      this.controls.lock();
+    };
   }
 
   const scene = new Scene();
   onMount(() => {
-    scene.setup(instructionsEl);
+    scene.setup();
   });
 </script>
 
-<div id="instructions" bind:this={instructionsEl}>
-  <div class="hover-box">
-    <p>Click to play</p>
-  </div>
-</div>
-
-<style>
-  #instructions {
-    position: fixed;
-    width: 100vw;
-    height: 100vh;
-    top: 0;
-    left: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-  }
-
-  .hover-box {
-    background: rgba(0, 0, 0, 0.5);
-    color: white;
-    padding: 0.5em 1em;
-    border-radius: 3px;
-  }
-</style>
+<Pause {paused} />
