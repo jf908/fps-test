@@ -3,6 +3,7 @@ import { Body, ContactEquation, Vec3 } from 'cannon-es';
 import { spring } from './spring';
 import type { Vec2 } from 'three';
 import type { Weapon } from './weapon';
+import { settings } from './store';
 export class FirstPersonControls extends THREE.EventDispatcher {
   enabled = false;
   cannonBody: Body;
@@ -83,6 +84,12 @@ export class FirstPersonControls extends THREE.EventDispatcher {
     this.euler = new THREE.Euler();
 
     this.connect();
+
+    settings.subscribe((settings) => {
+      if (settings.mouseSensitivity !== this.mouseSensitivity) {
+        this.mouseSensitivity = settings.mouseSensitivity;
+      }
+    });
   }
 
   connect() {

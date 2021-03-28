@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { settings } from './store';
 
 export class SoundEngine {
   private listener = new THREE.AudioListener();
@@ -6,6 +7,11 @@ export class SoundEngine {
 
   constructor(root: THREE.Object3D) {
     root.add(this.listener);
+
+    settings.subscribe((settings) => {
+      if (this.listener.getMasterVolume() === settings.masterVolume) return;
+      this.listener.setMasterVolume(settings.masterVolume);
+    });
   }
 
   loadSound(sound: string): Promise<AudioBuffer> {

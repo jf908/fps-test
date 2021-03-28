@@ -74,12 +74,6 @@
       this.setupLights();
       this.createGround();
 
-      const material = this.createMaterial({
-        color: 0xff0000,
-        metalness: 0,
-        roughness: 0.1,
-      });
-
       let boxSize = new Vec3(0.5, 0.5, 0.5);
       let boxShape = new Box(boxSize);
       let boxGeometry = new THREE.BoxGeometry(
@@ -87,7 +81,13 @@
         boxSize.y * 2,
         boxSize.z * 2
       );
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i <= 10; i++) {
+        const material = this.createMaterial({
+          color: 0xff0000,
+          metalness: 0,
+          roughness: i / 10,
+        });
+
         const x = i * 2;
         const y = 5;
         const z = -3;
@@ -126,7 +126,14 @@
           playerHeight,
           segments
         );
-        const mesh = new THREE.Mesh(cyl, material);
+        const mesh = new THREE.Mesh(
+          cyl,
+          this.createMaterial({
+            color: 0xeeeeee,
+            metalness: 0,
+            roughness: 1,
+          })
+        );
         const pos = this.playerBody.position;
         mesh.position.set(pos.x, pos.y, pos.z);
         this.scene.add(mesh);
@@ -197,6 +204,7 @@
 
       // Setup store listeners
       settings.subscribe((settings) => {
+        if (this.camera.fov === settings.fov) return;
         this.camera.fov = settings.fov;
         this.camera.updateProjectionMatrix();
       });
