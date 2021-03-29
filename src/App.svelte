@@ -257,7 +257,6 @@
         raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
 
         const intersects = raycaster.intersectObjects(this.scene.children);
-        console.log(intersects);
         if (intersects.length > 0) {
           const hit = intersects[0];
           if (isMesh(hit.object)) {
@@ -388,7 +387,7 @@
 
       if (this.controls.enabled) {
         this.controls.update(delta);
-        this.world.step(delta);
+        this.world.step(1 / 60, delta);
         for (let i = 0; i < this.bodies.length; i++) {
           const pos = this.bodies[i].position;
           this.meshes[i].position.set(pos.x, pos.y, pos.z);
