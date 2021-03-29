@@ -22,12 +22,9 @@
   import { SoundEngine } from './sound';
   import { settings } from './store';
   import Pause from './components/Pause.svelte';
+  import { isMesh } from './util';
 
   let paused = true;
-
-  function isMesh(obj: THREE.Object3D): obj is THREE.Mesh {
-    return obj['isMesh'] === true;
-  }
 
   let instructionsEl: HTMLElement;
   class Scene {
@@ -53,6 +50,8 @@
     private playerBody: Body;
 
     private thirdPerson = false;
+
+    private spriteMat = new THREE.SpriteMaterial({ color: 0x0000ff });
 
     setup() {
       this.setupPhysics();
@@ -144,6 +143,28 @@
       this.setupControls();
       this.world.addBody(this.playerBody);
 
+      const textureLoader = new THREE.TextureLoader();
+      const muzzle = textureLoader.load('assets/img/muzzle_02.png');
+      const muzzleMat = new THREE.MeshBasicMaterial({
+        color: 0xff8800,
+        map: muzzle,
+        transparent: true,
+      });
+      const muzzleSize = 0.3;
+      const muzzleObj = new THREE.Mesh(
+        new THREE.PlaneGeometry(muzzleSize, muzzleSize),
+        muzzleMat
+      );
+      muzzleObj.position.set(0, 0.18, 0.05 + muzzleSize / 2);
+      muzzleObj.setRotationFromEuler(
+        new THREE.Euler(Math.PI / 2, Math.PI / 2, 0)
+      );
+
+      // TODO: Figure out how to show lights without frame lag
+      // const muzzleLight = new THREE.PointLight(0xff8800, 1, 1);
+      // muzzleLight.position.set(0, 0, 0.05);
+      // muzzleObj.add(muzzleLight);
+
       // Animation Gun
       let mixer: THREE.AnimationMixer;
       const loader = new GLTFLoader();
@@ -164,27 +185,21 @@
         gltf.scene.scale.set(scale, scale, scale);
         gltf.scene.setRotationFromEuler(new THREE.Euler(0, Math.PI, 0));
         gltf.scene.position.set(0.3, -0.2, -0.5);
-        gltf.scene.renderOrder = 1;
         this.scene.add(gltf.scene);
         this.controls.setWeapon(
           new Weapon(
             this.sound,
             gltf.scene,
+            muzzleObj,
             action,
             this.sound.loadSound('assets/sound/fire_1.wav')
           )
         );
-
-        gltf.parser.getDependencies('material').then((materials) => {
-          materials.forEach((m: THREE.MeshStandardMaterial) => {
-            m.depthTest = false;
-            m.needsUpdate = true;
-          });
-        });
       });
 
       this.setupRenderer();
 
+      // Load HDR
       this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
       this.pmremGenerator.compileEquirectangularShader();
       new EXRLoader()
@@ -198,6 +213,19 @@
 
           texture.dispose();
         });
+
+      // Crosshair
+      const crosshairTex = textureLoader.load('assets/img/crosshair007.png');
+      const crosshairMat = new THREE.SpriteMaterial({
+        map: crosshairTex,
+        color: 0x00ff00,
+      });
+      const crosshair = new THREE.Sprite(crosshairMat);
+      const crosshairScale = 0.001;
+      crosshair.scale.multiplyScalar(crosshairScale);
+      crosshair.position.set(0, 0, -0.02);
+      // this.scene.add(crosshair);
+      this.camera.add(crosshair);
 
       document.body.appendChild(this.renderer.domElement);
       window.addEventListener('resize', () => this.onWindowResize(), false);
@@ -222,6 +250,38 @@
       this.controls.addEventListener('unlock', () => {
         this.controls.enabled = false;
         paused = true;
+      });
+
+      this.controls.addEventListener('fire', () => {
+        let raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
+
+        const intersects = raycaster.intersectObjects(this.scene.children);
+        console.log(intersects);
+        if (intersects.length > 0) {
+          const hit = intersects[0];
+          if (isMesh(hit.object)) {
+            const index = this.meshes.indexOf(hit.object);
+            if (index === -1) return;
+            const body = this.bodies[index];
+
+            const cameraLook = new THREE.Vector3();
+            this.camera.getWorldDirection(cameraLook);
+            cameraLook.normalize();
+
+            const sprite = this.createDebugSprite();
+            sprite.position.set(hit.point.x, hit.point.y, hit.point.z);
+            this.scene.add(sprite);
+            const arrowHelper = new THREE.ArrowHelper(cameraLook, hit.point);
+            this.scene.add(arrowHelper);
+
+            cameraLook.multiplyScalar(10);
+            body.applyImpulse(
+              new Vec3(cameraLook.x, cameraLook.y, cameraLook.z),
+              new Vec3(hit.point.x, hit.point.y, hit.point.z)
+            );
+          }
+        }
       });
     }
 
@@ -310,6 +370,12 @@
       return mat;
     }
 
+    createDebugSprite() {
+      const point = new THREE.Sprite(this.spriteMat);
+      point.scale.set(0.05, 0.05, 0.05);
+      return point;
+    }
+
     addPhysicsObject(body: Body, mesh: THREE.Mesh) {
       this.world.addBody(body);
       this.bodies.push(body);
@@ -341,10 +407,6 @@
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
-
-    resume = () => {
-      this.controls.lock();
-    };
   }
 
   const scene = new Scene();

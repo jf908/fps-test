@@ -30,6 +30,7 @@ export class FirstPersonControls extends THREE.EventDispatcher {
   isLocked = false;
   lockEvent = { type: 'lock' };
   unlockEvent = { type: 'unlock' };
+  fireEvent = { type: 'fire' };
 
   mouse: Vec2 = { x: 0, y: 0 };
 
@@ -138,6 +139,7 @@ export class FirstPersonControls extends THREE.EventDispatcher {
 
   onMouseDown = (event: MouseEvent) => {
     if (this.isLocked && event.button === 0 && this.weapon) {
+      this.dispatchEvent(this.fireEvent);
       this.weapon.fire();
     }
   };
@@ -253,6 +255,7 @@ export class FirstPersonControls extends THREE.EventDispatcher {
       this.weapon.object.setRotationFromEuler(
         new THREE.Euler(rot.y * rotScale, rot.x * rotScale + Math.PI, 0)
       );
+      this.weapon.update(dt);
     }
 
     this.yawObject.rotation.y -=
