@@ -15,6 +15,9 @@
         <button
           on:click={() => document.body.requestPointerLock()}>Resume</button>
         <button on:click={() => (menu = 'options')}>Options</button>
+        <a href="https://github.com/jf908/fps-test" target="_blank">
+          <button>GitHub Source</button>
+        </a>
       </div>
     {:else}
       <div class="menu" transition:fly={{ duration: 200, x: 100 }}>
