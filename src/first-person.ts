@@ -37,6 +37,8 @@ export class FirstPersonControls extends THREE.EventDispatcher {
   weapon: Weapon | null;
   weaponSpring = spring({ x: 0, y: 0 });
 
+  private static upVector = new THREE.Vector3(0, 1, 0);
+
   constructor(camera: THREE.Camera, cannonBody: Body) {
     super();
 
@@ -244,11 +246,6 @@ export class FirstPersonControls extends THREE.EventDispatcher {
       this.inputVelocity.x = 1;
     }
 
-    if (this.inputVelocity.length() > 0) {
-      this.inputVelocity.normalize();
-      this.inputVelocity.multiplyScalar(this.velocityFactor * dt);
-    }
-
     if (this.weapon) {
       let rot = this.weaponSpring({ x: this.mouse.x, y: this.mouse.y }, dt);
       const rotScale = 0.004;
@@ -272,11 +269,15 @@ export class FirstPersonControls extends THREE.EventDispatcher {
     this.mouse.y = 0;
 
     // Convert velocity to world coordinates
-    this.euler.x = this.pitchObject.rotation.x;
-    this.euler.y = this.yawObject.rotation.y;
-    this.euler.order = 'XYZ';
-    this.quaternion.setFromEuler(this.euler);
-    this.inputVelocity.applyQuaternion(this.quaternion);
+    this.inputVelocity.applyAxisAngle(
+      FirstPersonControls.upVector,
+      this.yawObject.rotation.y
+    );
+
+    if (this.inputVelocity.length() > 0) {
+      this.inputVelocity.normalize();
+      this.inputVelocity.multiplyScalar(this.velocityFactor * dt);
+    }
 
     // console.log(Math.pow(1 - 0.999, dt));
     this.velocity.x *= Math.pow(1 - 0.9999, dt);
