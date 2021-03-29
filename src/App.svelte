@@ -115,6 +115,7 @@
         material: this.playerMaterial,
         angularDamping: 1,
       });
+      this.playerBody.allowSleep = false;
       this.playerBody.addShape(playerShape);
       this.playerBody.position.set(0, 1, 10);
 
@@ -286,6 +287,7 @@
 
     setupPhysics() {
       this.world = new World();
+      this.world.allowSleep = true;
       this.world.gravity.set(0, -25, 0);
 
       this.world.defaultContactMaterial.contactEquationStiffness = 1e9;
@@ -293,10 +295,8 @@
 
       const solver = new GSSolver();
       solver.iterations = 7;
-      solver.tolerance = 0.1;
-      // hackery because I think types are broken
-      this.world.solver = new SplitSolver(solver as SplitSolver);
-      // this.world.solver = solver;
+      solver.tolerance = 0.01;
+      this.world.solver = new SplitSolver(solver);
 
       this.physicsMaterial = new Material('physics');
       this.playerMaterial = new Material('physics');
@@ -387,7 +387,7 @@
 
       if (this.controls.enabled) {
         this.controls.update(delta);
-        this.world.step(1 / 60, delta);
+        this.world.step(1 / 144, delta);
         for (let i = 0; i < this.bodies.length; i++) {
           const pos = this.bodies[i].position;
           this.meshes[i].position.set(pos.x, pos.y, pos.z);
