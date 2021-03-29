@@ -52,6 +52,7 @@
     private thirdPerson = false;
 
     private spriteMat = new THREE.SpriteMaterial({ color: 0x0000ff });
+    private debugPoints: THREE.Object3D[] = [];
 
     setup() {
       this.setupPhysics();
@@ -270,10 +271,9 @@
             cameraLook.normalize();
 
             const sprite = this.createDebugSprite();
-            sprite.position.set(hit.point.x, hit.point.y, hit.point.z);
-            this.scene.add(sprite);
             const arrowHelper = new THREE.ArrowHelper(cameraLook, hit.point);
-            this.scene.add(arrowHelper);
+            arrowHelper.add(sprite);
+            this.addDebugPoint(arrowHelper);
 
             cameraLook.multiplyScalar(10);
             body.applyImpulse(
@@ -373,6 +373,15 @@
       const point = new THREE.Sprite(this.spriteMat);
       point.scale.set(0.05, 0.05, 0.05);
       return point;
+    }
+
+    addDebugPoint(obj: THREE.Object3D) {
+      this.scene.add(obj);
+      this.debugPoints.push(obj);
+      if (this.debugPoints.length > 5) {
+        const point = this.debugPoints.shift();
+        this.scene.remove(point);
+      }
     }
 
     addPhysicsObject(body: Body, mesh: THREE.Mesh) {
