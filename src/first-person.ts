@@ -246,29 +246,36 @@ export class FirstPersonControls extends THREE.EventDispatcher {
       this.inputVelocity.x = 1;
     }
 
-    if (this.weapon) {
-      let rot = this.weaponSpring({ x: this.mouse.x, y: this.mouse.y }, dt);
-      const rotScale = 0.004;
-      this.weapon.object.setRotationFromEuler(
-        new THREE.Euler(rot.y * rotScale, rot.x * rotScale + Math.PI, 0)
-      );
-      this.weapon.update(dt);
-    }
-
-    this.yawObject.rotation.y -=
+    const yawDelta =
       ((this.mouse.x * 0.022 * this.mouseSensitivity) / 180) * Math.PI;
-    this.pitchObject.rotation.x -=
+    this.yawObject.rotation.y -= yawDelta;
+    const pitchDelta =
       ((this.mouse.y * 0.022 * this.mouseSensitivity) / 180) * Math.PI;
+    this.pitchObject.rotation.x -= pitchDelta;
 
     this.pitchObject.rotation.x = Math.max(
       -Math.PI / 2,
       Math.min(Math.PI / 2, this.pitchObject.rotation.x)
     );
 
+    if (this.weapon) {
+      let rot = this.weaponSpring(
+        {
+          x: THREE.MathUtils.clamp(yawDelta, -0.2, 0.2),
+          y: THREE.MathUtils.clamp(pitchDelta, -0.2, 0.2),
+        },
+        dt
+      );
+      const rotScale = 3;
+      this.weapon.object.setRotationFromEuler(
+        new THREE.Euler(rot.y * rotScale, rot.x * rotScale + Math.PI, 0)
+      );
+      this.weapon.update(dt);
+    }
+
     this.mouse.x = 0;
     this.mouse.y = 0;
 
-    // Convert velocity to world coordinates
     this.inputVelocity.applyAxisAngle(
       FirstPersonControls.upVector,
       this.yawObject.rotation.y
@@ -279,7 +286,6 @@ export class FirstPersonControls extends THREE.EventDispatcher {
       this.inputVelocity.multiplyScalar(this.velocityFactor * dt);
     }
 
-    // console.log(Math.pow(1 - 0.999, dt));
     this.velocity.x *= Math.pow(1 - 0.9999, dt);
     this.velocity.y *= Math.pow(1 - 0.5, dt);
     this.velocity.z *= Math.pow(1 - 0.9999, dt);

@@ -21,12 +21,10 @@ function springTick(
   return d + currentValue;
 }
 
-export function spring(value: Vec2) {
+export function spring(value: Vec2, stiffness = 0.01, damping = 0.5) {
   let current = value;
   let last = value;
 
-  let stiffness = 0.01;
-  let damping = 0.5;
   let invMass = 1;
 
   return (target: Vec2, dt: number) => {
