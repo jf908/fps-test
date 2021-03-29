@@ -36,6 +36,10 @@ export class FirstPersonControls extends THREE.EventDispatcher {
 
   weapon: Weapon | null;
   weaponSpring = spring({ x: 0, y: 0 });
+  weaponPosSpring = spring({ x: 0, y: 0 });
+
+  bobbingObject: THREE.Object3D;
+  bobbingTime = 0;
 
   private static upVector = new THREE.Vector3(0, 1, 0);
 
@@ -52,6 +56,9 @@ export class FirstPersonControls extends THREE.EventDispatcher {
     this.yawObject = new THREE.Object3D();
     this.yawObject.position.y = 2;
     this.yawObject.add(this.pitchObject);
+
+    this.bobbingObject = new THREE.Object3D();
+    this.pitchObject.add(this.bobbingObject);
 
     this.quaternion = new THREE.Quaternion();
 
@@ -212,7 +219,8 @@ export class FirstPersonControls extends THREE.EventDispatcher {
 
   setWeapon(weapon: Weapon) {
     this.weapon = weapon;
-    this.pitchObject.add(weapon.object);
+
+    this.bobbingObject.add(weapon.object);
   }
 
   getObject() {
@@ -284,6 +292,24 @@ export class FirstPersonControls extends THREE.EventDispatcher {
     if (this.inputVelocity.length() > 0) {
       this.inputVelocity.normalize();
       this.inputVelocity.multiplyScalar(this.velocityFactor * dt);
+    }
+
+    if (this.weapon) {
+      let pos: Vec2;
+      if (this.inputVelocity.length() > 0) {
+        pos = this.weaponPosSpring(
+          {
+            x: Math.sin(this.bobbingTime * 8 - Math.PI / 2) * 0.01,
+            y: Math.abs(Math.sin(this.bobbingTime * 8)) * 0.02,
+          },
+          dt
+        );
+        this.bobbingTime += dt;
+      } else {
+        pos = this.weaponPosSpring({ x: 0, y: 0 }, dt);
+        this.bobbingTime = 0;
+      }
+      this.bobbingObject.position.set(pos.x, pos.y, 0);
     }
 
     this.velocity.x *= Math.pow(1 - 0.9999, dt);
